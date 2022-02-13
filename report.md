@@ -8,7 +8,7 @@
 
 
 
-![](C:\mega\work\pwm_drive\report.assets\top.png)
+![](\report.assets\top.png)
 
 **apb_slave@pclk**
 
