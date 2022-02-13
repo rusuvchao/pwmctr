@@ -1,14 +1,14 @@
 ---
-typora-root-url: img
+
 ---
 
 # top-level diagram
 
 
 
-<img src="/../report.assets/top.png" style="zoom:27%;" />
 
 
+![](C:\mega\work\pwm_drive\report.assets\top.png)
 
 **apb_slave@pclk**
 
@@ -123,13 +123,15 @@ the advantage is that
 
  
 
+<img src="C:\mega\work\pwm_drive\report.assets\valid ready talk.svg" style="zoom:700%;" />
+
+
+
+![](C:\mega\work\pwm_drive\report.assets\valid ready timing.png)
 
 
 
 
-<img src="/../report.assets/valid ready talk.svg" style="zoom:800%;" />
-
-<img src="/../report.assets/valid ready timing.png" style="zoom:100%;" />
 
 ```verilog
 
