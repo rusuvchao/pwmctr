@@ -29,7 +29,7 @@
     
     reg valid, ready;
     
-    reg [31:0]  LOCK, MEMO;
+    reg [31:0]  DLOC, MEMO;
     
     // pclk domain 
     reg ready_pclk;
@@ -56,10 +56,10 @@
     always@(posedge pclk or negedge rsn)  
     if (!rsn) begin 
         valid<=0;  
-        LOCK<= 0; 
+        DLOC<= 0; 
     end else 
     case ( STATE )
-        STATE_READY: LOCK<={MEM1,MEM0};   
+        STATE_READY: DLOC<={MEM1,MEM0};   
         STATE_LOCK : valid<=1;
         STATE_END  : valid<=0; 
     endcase
@@ -73,7 +73,7 @@
     end else 
     case ( STATE )
         STATE_WAIT  :                   ready <= 1;   
-        STATE_VALID : begin MEMO<=LOCK; ready <= 0;  end   
+        STATE_VALID : begin MEMO<=DLOC; ready <= 0;  end   
     endcase
      
     assign data=MEMO[15:0];       

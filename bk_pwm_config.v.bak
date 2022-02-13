@@ -29,10 +29,10 @@
     
     reg valid, ready;
     
-    reg [31:0]  LOCK, MEMO;
+    reg [31:0]  DLOC, MEMO;
     
     // pclk domain 
-    reg ready_pclk;
+    ready_pclk;
     always@(posedge pclk or negedge rsn)  
     if (!rsn) 
         ready_pclk <= 0; 
@@ -42,13 +42,12 @@
         
     always@(*)
     begin 
-        
-        STATE=STATE_WAIT;
-        if ( (valid==0) && (ready==0)                       ) STATE=STATE_WAIT ;
-        if ( (valid==0) && (ready==1) && (ready_pclk==0)    ) STATE=STATE_READY;
-        if ( (valid==0) && (ready==1) && (ready_pclk==1)    ) STATE=STATE_LOCK ;
-        if ( (valid==1) && (ready==1)                       ) STATE=STATE_VALID;
-        if ( (valid==1) && (ready==0)                       ) STATE=STATE_END  ;
+        THIS_STATE=STATE_WAIT;
+        if ( (valid==0) && (ready==0)                       ) THIS_STATE=STATE_WAIT ;
+        if ( (valid==0) && (ready==1) && (ready_pclk==0)    ) THIS_STATE=STATE_READY;
+        if ( (valid==0) && (ready==1) && (ready_pclk==1)    ) THIS_STATE=STATE_LOCK ;
+        if ( (valid==1) && (ready==1)                       ) THIS_STATE=STATE_VALID;
+        if ( (valid==1) && (ready==0)                       ) THIS_STATE=STATE_END  ;
     end 
         
         
@@ -56,15 +55,15 @@
     always@(posedge pclk or negedge rsn)  
     if (!rsn) begin 
         valid<=0;  
-        LOCK<= 0; 
+        DLOC<= 0; 
     end else 
     case ( STATE )
-        STATE_READY: LOCK<={MEM1,MEM0};   
+        STATE_READY: DLOC<={MEM1,MEM0};   
         STATE_LOCK : valid<=1;
         STATE_END  : valid<=0; 
     endcase
            
-   // core clk domain  
+    
          
     always@(posedge core_clk or negedge rsn)  
     if (!rsn) begin 
@@ -73,11 +72,10 @@
     end else 
     case ( STATE )
         STATE_WAIT  :                   ready <= 1;   
-        STATE_VALID : begin MEMO<=LOCK; ready <= 0;  end   
+        STATE_VALID : begin MEMO<=DLOC; ready <= 0;  end   
     endcase
-     
-    assign data=MEMO[15:0];       
-    assign {PWM_PRD,PWM_RES,PWM_POL}=MEMO[31:16];
+           
+    
     
     
 endmodule
