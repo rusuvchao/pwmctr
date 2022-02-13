@@ -6,7 +6,7 @@ typora-root-url: img
 
 
 
-<img src="/top.png" style="zoom:27%;" />
+<img src="/../report.assets/top.png" style="zoom:27%;" />
 
 
 
@@ -31,7 +31,7 @@ typora-root-url: img
 
 
 
-**pwm_drive@core_clk**
+**pwm_drive@core_clk**  (low power design)
 
 - generate sub-clock for PWM signal
   - generate a reference signal that  increments@subclock
@@ -95,7 +95,7 @@ If the APB clock and core clock come from individual sources, we always need to 
 
 If the two asyn clocks rising nearly at the same time, the reader can not be 100% sure that it can read the signal, that is called metasatble. For the purpose of getting stable and accurate signals, we can implement double sampling (or called 2FF) to highly(nearly 100%) decrease the possibility that the metastable occurs.  
 
- ![img](https://hardwarebee.com/wp-content/uploads/2020/02/2_flop_cdc.jpg)
+ ![img](/../report.assets/2_flop_cdc.jpg)
 
 
 
@@ -127,20 +127,161 @@ the advantage is that
 
 
 
-<img src="/valid ready talk.svg" style="zoom:800%;" />
+<img src="/../report.assets/valid ready talk.svg" style="zoom:800%;" />
 
-<img src="/valid ready timing.png" style="zoom:50%;" />
+<img src="/../report.assets/valid ready timing.png" style="zoom:100%;" />
 
-## PWM round period
+```verilog
 
-Predefinition : 
+ module   pwm_config
+	(
+		input          pclk,    //  
+        input          core_clk,  // Assume CORE clock can only be faster or as fast as the APB clock
+		input          rsn,     
 
-​	Suppose PWM resolution is 256
+        //pclk domain
+        input       [15:0]  MEM0,
+        input       [15:0]  MEM1,
 
-​	PWM frequency is 1kHz
+        
+        //core clk domain    
+		output       [15:0]  data,      
+		output       [ 3:0]  PWM_PRD, //0=0.5ms 1=0.50ms  2=0.75ms  3=1.00ms  4=1.25ms   5=1.50ms   6=1.75ms   7=2.00ms
+        output       [ 2:0]  PWM_RES, //resolution: 0=12bit(default), 1=13bits,2=14bit, 3=15bit, 4=16bit;
+        output               PWM_POL // polarity, 0=idle_level_low 1=idle_level_high
+	);
+    
+    
+    
+    reg [2:0] STATE; //default wait=0/5/6/7 , ready=1, lock=2, valid=3, end=4
+    wire [2:0] STATE_WAIT =0;
+    wire [2:0] STATE_READY=1;
+    wire [2:0] STATE_LOCK =2;
+    wire [2:0] STATE_VALID=3;
+    wire [2:0] STATE_END  =4;
+    
+    reg valid, ready;
+    
+    reg [31:0]  LOCK, MEMO;
+    
+    // pclk domain 
+    reg ready_pclk;
+    always@(posedge pclk or negedge rsn)  
+    if (!rsn) 
+        ready_pclk <= 0; 
+    else 
+        ready_pclk <= ready;
+        
+        
+    always@(*)
+    begin 
+        
+        STATE=STATE_WAIT;
+        if ( (valid==0) && (ready==0)                       ) STATE=STATE_WAIT ;
+        if ( (valid==0) && (ready==1) && (ready_pclk==0)    ) STATE=STATE_READY;
+        if ( (valid==0) && (ready==1) && (ready_pclk==1)    ) STATE=STATE_LOCK ;
+        if ( (valid==1) && (ready==1)                       ) STATE=STATE_VALID;
+        if ( (valid==1) && (ready==0)                       ) STATE=STATE_END  ;
+    end 
+        
+        
+        
+    always@(posedge pclk or negedge rsn)  
+    if (!rsn) begin 
+        valid<=0;  
+        LOCK<= 0; 
+    end else 
+    case ( STATE )
+        STATE_READY: LOCK<={MEM1,MEM0};   
+        STATE_LOCK : valid<=1;
+        STATE_END  : valid<=0; 
+    endcase
+           
+   // core clk domain  
+         
+    always@(posedge core_clk or negedge rsn)  
+    if (!rsn) begin 
+        ready <= 0; 
+        MEMO<=0;
+    end else 
+    case ( STATE )
+        STATE_WAIT  :                   ready <= 1;   
+        STATE_VALID : begin MEMO<=LOCK; ready <= 0;  end   
+    endcase
+     
+    assign data=MEMO[15:0];       
+    assign {PWM_PRD,PWM_RES,PWM_POL}=MEMO[31:16];
+    
+    
+endmodule
+```
 
-As presented before, in the module
+
+
+## PWM duty cycle
+
+**Predefinition** : 
+
+- Suppose PWM resolution is 256
+- PWM frequency is 1kHz
+
+As presented before, in the module there is 
+
+$subclock = coresClock  \div (2^{16bit-8bit}) \div (4kHz/1kHz)$
+
+generate a reference signal $dref$ that  increments@subclock , from 0 to 255
 
 
 
+$dutyCycle=\frac{data}{256}$, 
+
+if the data=0, the pwm $dutyCycle=\frac{0}{256}$, 
+
+if the data=255, the pwm $dutyCycle=\frac{255}{256}$
+
+
+
+it give a stable signal that the pwm frequency cannot be detected, we need a small thin glitch signal to represent pwm frequency: 
+
+$dutyCycle=\frac{data+1}{257}$, 
+
+if the data=0, the pwm $dutyCycle=\frac{1}{257}$, 
+
+if the data=255, the pwm $dutyCycle=\frac{256}{257}$
+
+​			BTW:  if the clock does not change, the pwm frequency will be slightly decreased. sometimes can be ignored. 
+
+
+
+
+
+## PWM application for FPGA (low area, high power implementation)
+
+If the power is not an issue, it is better the PWM run at core clock rather than generated subclock.
+
+- The RESOLUTION is fixed at 16bit internally. the  $dref$ that  increments@coreClock , from 0 to 65536, the resolution only used for how many bit MSB should be read from input data
+-  Generated a new $dref2=dref*N$, N=1 when 0.25ms, N=8 when 2ms, remove the  carry
+- Comparing $dref2$ with $data$ to get pwm_o
+
+```verilog
  
+reg [15:0] dref;
+ 
+always@(posedge clk  or negedge rsn) 
+    if (!rsn)           dref <= 0;       
+    else                dref <= dref + 1;  
+
+reg [15:0] dref2=dref * (RES+1);
+
+always@(posedge clk_div  or negedge rsn) 
+    if (!rsn)           pwm_o <= 0;    
+    else if (PWM_POL)   pwm_o <= data > dref;  
+    else                pwm_o <= data < dref;  
+ 
+```
+
+the surface is much smaller than the original one.
+
+
+
+## 
